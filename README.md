@@ -16,7 +16,6 @@ HSLU_HS25_DSPRO2/
 ├── notebooks/
 ├── src/  
 │   ├── logs/
-│   │   └── .gitkeep 
 └── store/ 
 ```
 
