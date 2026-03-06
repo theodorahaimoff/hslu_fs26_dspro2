@@ -5,7 +5,7 @@ The goal of the project is to identify how strongly these cryptocurrencies depen
 
 ## 🗂️ Repo Layout
 ```bash
-HSLU_HS25_DSPRO1/
+HSLU_HS25_DSPRO2/
 ├── README.md
 ├── requirements.txt
 ├── .gitignore
