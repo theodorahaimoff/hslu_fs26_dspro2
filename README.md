@@ -35,6 +35,7 @@ HSLU_HS25_DSPRO2/
 │   ├── data/               # data loading and preprocessing code
 │   ├── features/           # feature engineering code
 │   ├── models/             # clustering, HMM, LSTM implementations
+│   ├── utils/              # general helper functions used across the project
 │   └── app/                # Streamlit app code
 └── store/                  # local artifacts, cached outputs, MLflow or intermediate files
 ```
