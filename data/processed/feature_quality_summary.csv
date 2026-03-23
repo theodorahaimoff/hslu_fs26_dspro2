@@ -5,9 +5,11 @@ btc_corr_30d,2623.0,180
 btc_corr_90d,2983.0,540
 close,2443.0,0
 dxy_log_return,,24
+gold_log_return,,24
 idio_vol_30d,2593.0,150
 log_return,2449.0,6
 log_volume,2443.0,0
 log_volume_change,2449.0,6
+sp500_log_return,,24
 vix_log_return,,24
 volatility_30d,2623.0,180

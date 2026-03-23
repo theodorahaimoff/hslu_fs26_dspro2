@@ -1,3 +1,5 @@
 Ticker,symbol,first_date,last_date,n_rows,missing_open,missing_high,missing_low,missing_close,missing_volume,missing_adj_close
-DXY,DX=F,2017-01-03,2026-03-16,2317,0,0,0,0,0,0
-VIX,^VIX,2017-01-03,2026-03-17,2313,0,0,0,0,0,0
+DXY,DX-Y.NYB,2017-01-03,2026-03-23,2319,0,0,0,0,0,0
+Gold,GC=F,2017-01-03,2026-03-23,2318,0,0,0,0,0,0
+SP500,^GSPC,2017-01-03,2026-03-20,2316,0,0,0,0,0,0
+VIX,^VIX,2017-01-03,2026-03-23,2317,0,0,0,0,0,0
