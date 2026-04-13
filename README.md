@@ -114,6 +114,93 @@ Replace `EXPERIMENT_X` with the constant that matches your notebook:
 | 07 Classification | `EXPERIMENT_CLASSIFIERS` | model_type, hyperparameters, features_used | accuracy, f1_macro, precision, recall |
 | 08 LSTM | `EXPERIMENT_LSTM` | window_size, lstm_units, epochs, learning_rate | train_mae, val_mae, test_mae, test_rmse |
 
+## Plot Style Guide
+
+All charts in this project use a shared visual style defined in `src/utils/plot_config.py`.
+This ensures that every notebook and the Streamlit app produce consistent-looking graphs
+that match the CryptoLens color scheme.
+
+### Setup
+
+At the top of every notebook that produces plots, add the following after your imports:
+
+```python
+import sys
+import matplotlib as mpl
+from pathlib import Path
+
+sys.path.append(str(Path.cwd().parent))
+from src.utils.plot_config import COIN_COLORS, apply_plot_style
+
+apply_plot_style()
+
+# Re-apply background settings after seaborn initializes,
+# as seaborn can override these during its own setup.
+mpl.rcParams["figure.facecolor"] = "#F9F7FC"
+mpl.rcParams["axes.facecolor"]   = "#FFFFFF"
+mpl.rcParams["font.family"]      = "sans-serif"
+```
+
+### Coin colors
+
+Each coin has a fixed color defined in `COIN_COLORS`. Always use these when
+coloring lines, bars, or markers by coin so charts are consistent across notebooks.
+
+```python
+# Line chart
+for ticker in selected_tickers:
+    ax.plot(df.index, df[ticker], color=COIN_COLORS[ticker], label=ticker)
+
+# Bar chart
+ax.bar(tickers, values, color=[COIN_COLORS[t] for t in tickers])
+
+# Seaborn chart (pass as palette)
+sns.boxplot(data=df, x="Ticker", y="Value", palette=COIN_COLORS, ax=ax)
+```
+
+The current coin colors are:
+
+| Coin | Hex |
+|------|-----|
+| BTC  | `#5B6EF5` |
+| ETH  | `#F49D37` |
+| SOL  | `#C2E812` |
+| XRP  | `#549F93` |
+| BNB  | `#E2C2FF` |
+| TRX  | `#F76F8E` |
+
+If you need to update a color, change it in `src/utils/plot_config.py` only.
+Every notebook and the app will pick up the change automatically on the next run.
+
+### Macro factor colors
+
+Macro factors (DXY, VIX, Gold, SP500) are not in the shared config since they
+are only used in the EDA notebook. They are defined locally in that notebook as:
+
+```python
+COLORS = {
+    **COIN_COLORS,
+    "DXY":   "#2E86C1",
+    "VIX":   "#E74C3C",
+    "Gold":  "#FFD700",
+    "SP500": "#1B5E20",
+}
+```
+
+### Saving figures
+
+When using matplotlib inside Streamlit, always close the figure after rendering
+to prevent memory from accumulating across reruns:
+
+```python
+fig, ax = plt.subplots()
+# ... your plot code ...
+st.pyplot(fig)
+plt.close(fig)
+```
+
+In notebooks, use `plt.show()` as normal.
+
 ## Notes for Collaborators
 
 - If you make any changes to the notebooks, you can export them into a script
