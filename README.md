@@ -30,16 +30,13 @@ HSLU_HS25_DSPRO2/
 │   └── config.toml             # contains Streamlit global configuration
 ├── data/
 │   ├── raw/                    # downloaded raw market data
-│   └── processed/              # cleaned and feature-engineered datasets
+│   ├── processed/              # cleaned and feature-engineered datasets
+│   └── model_outputs/          # predictions, regime labels, cluster assignments
 ├── notebooks/                  # exploration, experiments, prototyping
 ├── src/
-│   ├── logs/                   # application or experiment logs
-│   ├── data/                   # data loading and preprocessing code
-│   ├── features/               # feature engineering code
 │   ├── models/                 # clustering, HMM, LSTM implementations
 │   ├── utils/                  # general helper functions used across the project
 │   └── app/                    # Streamlit app code
-├── store/                      # local artifacts, cached outputs and intermediate files
 └── mlruns/                     # MLflow tracking directory (auto-generated, see .gitignore)
 ```
 
