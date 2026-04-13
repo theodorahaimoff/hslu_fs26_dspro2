@@ -215,3 +215,6 @@ src/logs/*
 # Keep empty folders visible
 !src/logs/.gitkeep
 
+# MLflow
+mlruns/
+
