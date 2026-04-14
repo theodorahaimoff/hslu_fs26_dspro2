@@ -6,9 +6,9 @@ import mlflow
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent
-MLFLOW_TRACKING_URI = PROJECT_ROOT / "mlruns"
+MLFLOW_TRACKING_URI = (PROJECT_ROOT / "mlruns").as_uri()
 
-mlflow.set_tracking_uri(str(MLFLOW_TRACKING_URI))
+mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
 
 # One experiment per model type. Use these constants in the notebooks
 # so the names stay consistent.
