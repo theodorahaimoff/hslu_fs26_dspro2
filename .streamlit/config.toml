@@ -1,11 +1,12 @@
 [theme]
+base = "light"
 headingFont = "Host Grotesk:https://fonts.googleapis.com/css2?family=Host+Grotesk:wght@800&display=swap"
 font = "Host Grotesk:https://fonts.googleapis.com/css2?family=Host+Grotesk&display=swap"
 headingFontSizes = ["50px", "24px", "20px"]
-primaryColor = "#8678FF"
-backgroundColor = "#F7F4FF"
-secondaryBackgroundColor = "#EAE8FF"
-textColor = "#030301"
+primaryColor = "#5B6EF5"
+backgroundColor = "#f9f7fc"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#1A1D2E"
 borderColor = "#A096FF"
 
 [server]
