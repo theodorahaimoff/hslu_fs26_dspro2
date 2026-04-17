@@ -41,11 +41,18 @@ HSLU_HS25_DSPRO2/
 ```
 
 ## Local Setup
-Fixed Python version: 3.12
 
-```bash
+### Windows Terminal
+```cmd
 python -m venv .venv
-source .venv/bin/activate        # Windows: .venv\Scripts\activate
+.venv\Scripts\activate.bat
+pip install -r requirements.txt
+```
+
+### Mac / Linux
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
