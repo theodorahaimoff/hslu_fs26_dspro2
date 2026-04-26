@@ -56,8 +56,6 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## Initialisation
-
 ## MLflow Experiment Tracking
 
 This project uses MLflow to track model experiments across notebooks 04 to 08.
@@ -84,7 +82,7 @@ import mlflow
 import sys
 from pathlib import Path
 
-sys.path.append(str(Path.cwd().parent))
+sys.path.append(str(Path.cwd().resolve().parent))
 from mlflow_utils import get_or_create_experiment, EXPERIMENT_X
 ```
 
@@ -213,7 +211,7 @@ In notebooks, use `plt.show()` as normal.
     ```
     > 👉 **Note** \
     Any cells that shouldn't be exported into the backend should be tagged as `noexport`. Make sure the ones you do export are actually needed for the app backend.
-- If the error `ModuleNotFound` pops up, there's a dependency issue. Either there's a mismatch of package versions or a package isn't supported by the Streamlit Python version (3.13.9).
+- If the error `ModuleNotFound` pops up, there's a dependency issue. Either there's a mismatch of package versions or a package isn't supported by the Streamlit Python version.
 - Use Conventional Commit messages when committing changes so the history remains structured and easy to read. \
   Format: `<type>: short description` \
   Common types used in this repository: 
