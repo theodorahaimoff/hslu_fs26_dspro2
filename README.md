@@ -18,6 +18,28 @@ Data frequency: daily  \
 Start date: 2017-01-01 \
 Currency: USD
 
+## Modeling Strategy
+
+The project has two parallel tracks that share the feature table from notebook 02:
+
+### Track A Supervised BTC direction prediction (04 → 07 → 08)
+Same target across all three notebooks: **sign of BTC's average log return over the next 30 trading days** (binary classification). Train/test split is chronological (first 80% train, last 20% test).
+
+- `04`: baselines (majority class, trailing 30-day sign, logistic regression). Defines the beat-this line.
+- `07`: stronger classifiers (Random Forest, Gradient Boosting) on the same target, with regime context from Track B as features. Ablations isolate the value of regime information.
+- `08`: LSTM on the same target. Tests whether sequence memory beats the static feature-vector approach.
+
+### Track B Unsupervised regime detection (05, 06)
+Goal: label each trading day with a market state from cross-sectional features (volatility, BTC-correlation, dispersion across the 5 altcoins).
+
+- `05` — K-Means. Treats each day as independent.
+- `06` — HMM. Same labeling task, but explicitly models state persistence and transition probabilities.
+
+These are alternative approaches to the same labeling problem, not a chain. The outputs of Track B feed Track A as additional features.
+
+### How the tracks connect
+The headline question is *whether altcoin diversification potential is regime-dependent*. Track B identifies the regimes while Track A uses them as context to predict BTC direction and reports per-regime accuracy. A regime-aware model that beats baseline only in low-altcoin-correlation regimes is itself a finding about diversification, not a failure.
+
 ## Repo Layout
 ```bash
 HSLU_HS25_DSPRO2/

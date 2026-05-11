@@ -12,11 +12,12 @@ mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
 
 # One experiment per model type. Use these constants in the notebooks
 # so the names stay consistent.
-EXPERIMENT_BASELINE     = "baseline"
-EXPERIMENT_CLUSTERING   = "clustering"
-EXPERIMENT_HMM          = "hmm_regime_detection"
-EXPERIMENT_CLASSIFIERS  = "classification"
-EXPERIMENT_LSTM         = "lstm_forecasting"
+EXPERIMENT_BASELINE       = "baseline"
+EXPERIMENT_CLUSTERING     = "clustering"
+EXPERIMENT_HMM            = "hmm_regime_detection"
+EXPERIMENT_CLASSIFIERS    = "classification"
+EXPERIMENT_DIVERSIFICATION = "diversification"
+EXPERIMENT_LSTM           = "lstm_forecasting"
 
 
 def get_or_create_experiment(name: str) -> str:
