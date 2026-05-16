@@ -22,14 +22,16 @@ Currency: USD
 
 The project has two parallel tracks that share the feature table from notebook 02:
 
-### Track A Supervised BTC direction prediction (04 → 07 → 08)
+### Track A — Supervised BTC direction prediction (04 → 07 → 09)
 Same target across all three notebooks: **sign of BTC's average log return over the next 30 trading days** (binary classification). Train/test split is chronological (first 80% train, last 20% test).
 
 - `04`: baselines (majority class, trailing 30-day sign, logistic regression). Defines the beat-this line.
-- `07`: stronger classifiers (Random Forest, Gradient Boosting) on the same target, with regime context from Track B as features. Ablations isolate the value of regime information.
-- `08`: LSTM on the same target. Tests whether sequence memory beats the static feature-vector approach.
+- `07`: Random Forest and Gradient Boosting classifiers with regime context from Track B as additional features. Tests how much the regime information actually helps. Best run uses threshold calibration to reduce over-prediction.
+- `08`: portfolio backtest broken down by HMM regime. Three portfolios (BTC-only, equal-weight, BTC-heavy) compared on Sharpe ratio and diversification ratio across calm and volatile market periods.
+- `09`: LSTM on the same target. Tests whether a sequence model beats the static classifiers from `07`. Hyperparameters selected via `09b`.
+- `09b`: hyperparameter sweep over patience, recurrent dropout, and learning rate. Run once before `09`.
 
-### Track B Unsupervised regime detection (05, 06)
+### Track B — Unsupervised regime detection (05, 06)
 Goal: label each trading day with a market state from cross-sectional features (volatility, BTC-correlation, dispersion across the 5 altcoins).
 
 - `05` — K-Means. Treats each day as independent.
@@ -42,7 +44,7 @@ The headline question is *whether altcoin diversification potential is regime-de
 
 ## Repo Layout
 ```bash
-HSLU_HS25_DSPRO2/
+HSLU_FS26_DSPRO2/
 ├── README.md
 ├── requirements.txt
 ├── .python-version             # pins Python 3.12 for Streamlit Community Cloud
@@ -80,7 +82,7 @@ pip install -r requirements.txt
 
 ## MLflow Experiment Tracking
 
-This project uses MLflow to track model experiments across notebooks 04 to 08.
+This project uses MLflow to track model experiments across notebooks 04 to 09b.
 Every time you train a model or try a different configuration, the run should be
 logged with MLflow so results can be compared later.
 
@@ -135,8 +137,10 @@ Replace `EXPERIMENT_X` with the constant that matches your notebook:
 | 04 Baseline | `EXPERIMENT_BASELINE` | model_type, dataset, train/test period | accuracy, f1_macro |
 | 05 Clustering | `EXPERIMENT_CLUSTERING` | algorithm, n_clusters, features_used | silhouette_score, inertia |
 | 06 HMM | `EXPERIMENT_HMM` | n_states, covariance_type, n_iter | log_likelihood, AIC, BIC |
-| 07 Classification | `EXPERIMENT_CLASSIFIERS` | model_type, hyperparameters, features_used | accuracy, f1_macro, precision, recall |
-| 08 LSTM | `EXPERIMENT_LSTM` | window_size, lstm_units, epochs, learning_rate | train_mae, val_mae, test_mae, test_rmse |
+| 07 Classification | `EXPERIMENT_CLASSIFIERS` | model_type, feature_block, k_states | accuracy, f1_macro, precision, recall |
+| 08 Diversification | `EXPERIMENT_DIVERSIFICATION` | portfolio, regime_source, date range | sharpe, ann_return, ann_vol, diversification_ratio |
+| 09 LSTM | `EXPERIMENT_LSTM` | lookback, lstm_units, dropout, learning_rate | accuracy, f1_macro, precision, recall |
+| 09b LSTM Sweep | `lstm_sweep` | config_label, patience, recurrent_dropout, l2_reg | accuracy, f1_macro |
 
 ## Plot Style Guide
 
