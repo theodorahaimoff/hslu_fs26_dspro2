@@ -58,9 +58,14 @@ HSLU_FS26_DSPRO2/
 │   └── model_outputs/          # predictions, regime labels, cluster assignments
 ├── notebooks/                  # exploration, experiments, prototyping
 ├── src/
-│   ├── models/                 # clustering, HMM, LSTM implementations
-│   ├── utils/                  # general helper functions used across the project
-│   └── app/                    # Streamlit app code
+│   ├── features/
+│   │   └── daily.py            # shared daily feature aggregation used by notebooks 05, 06, 07, 09                
+│   ├── utils/
+│   │   └── plot_config.py      # shared matplotlib style and coin color palette                  
+│   └── app/
+│       ├── app.py              # Streamlit entry point, layout and plotting only
+│       ├── backend.py          # data loading and preprocessing functions for the app
+│       └── logo.svg            # CryptoLens logo
 └── mlruns/                     # MLflow tracking directory (auto-generated, see .gitignore)
 ```
 
@@ -79,6 +84,118 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 ```
+## CryptoLens Streamlit App
+ 
+CryptoLens is the interactive front end for this project. It reads the pre-computed
+CSV files produced by the notebooks and presents the results through a browser-based
+dashboard aimed at users without a finance or data science background.
+ 
+All model training happens in the notebooks. The app does not re-train or re-run any
+model at runtime. It only loads data from `data/processed/` and `data/model_outputs/`
+and visualizes it.
+ 
+### Architecture
+ 
+The app is split into two files:
+ 
+- `src/app/backend.py`: all `pd.read_csv` calls and data preprocessing logic.
+  Every function that reads from disk is decorated with `@st.cache_data` so repeated
+  sidebar interactions do not re-read files. Helper functions (filtering, derived
+  metrics) accept DataFrames as arguments and are not cached.
+- `src/app/app.py`: layout, sidebar controls, and plotting only. It imports from
+  `backend.py` and never calls `pd.read_csv` directly.
+This separation keeps the plotting code readable and makes it straightforward to
+update a data source or preprocessing step without touching the layout.
+ 
+### Running the app
+ 
+Make sure the virtual environment is active and all notebooks up to 09 have been
+run at least once so the processed CSV files exist. Then, from the project root:
+ 
+```bash
+streamlit run src/app/app.py
+```
+ 
+The app will open in your default browser at `http://localhost:8501`.
+ 
+### Sidebar controls
+ 
+| Control | Description |
+|---|---|
+| Cryptocurrencies | Multiselect for the five altcoins. Bitcoin is always included as the reference coin. |
+| Time period | Date range picker. Affects all charts that show data over time. The minimum start date is April 2020, when all six coins were available simultaneously. |
+ 
+### Tabs
+ 
+**Price History**
+ 
+Shows raw closing prices in USD for the selected coins over the chosen date range,
+and a normalized chart anchored to CHF 100 at the start of the period. The
+normalized view makes it easier to compare growth rates across coins that trade at
+very different price levels.
+ 
+Data source: `data/processed/crypto_wide_close_full.csv`
+ 
+**Risk Overview**
+ 
+Summarizes how unpredictable each coin's price has been using three views: a risk
+bucket table (Low / Medium / High) based on average 30-day rolling volatility, a
+rolling volatility line chart over the selected period, a maximum drawdown bar chart
+showing the worst peak-to-trough drop in the full history, and a box plot of daily
+log returns showing the typical range of daily price swings.
+ 
+Data sources: `data/processed/crypto_wide_close_full.csv`,
+`data/processed/crypto_features_long_aligned.csv`
+ 
+**Coin Independence**
+ 
+Addresses the central research question of the project: do the selected altcoins
+actually move independently of Bitcoin? The tab shows an independence ratings table
+derived from average 30-day BTC correlation over the full history, and a rolling
+correlation chart over the selected period so users can see how the relationship has
+changed over time.
+ 
+Data source: `data/processed/crypto_features_long_aligned.csv`
+ 
+**Market Conditions**
+ 
+Uses the Hidden Markov Model output from notebook 06 to label each trading day as
+either Low Volatility / Trending or High Volatility. The tab shows the current
+market phase and how many consecutive days it has lasted, a Bitcoin price chart with
+colored background bands indicating which phase was active at each point in time,
+and a summary table of average daily return and average volatility per phase.
+ 
+Data source: `data/model_outputs/hmm_regime_labels.csv`,
+`data/processed/crypto_features_long_aligned.csv`
+ 
+**Price Forecast**
+ 
+Presents the output of the LSTM model from notebook 09. The model predicts the sign
+of Bitcoin's 30-day average log return (up or down), not a price level. The tab
+shows the Bitcoin price chart with colored markers indicating the model's predicted
+direction at each date in the test period (December 2024 to February 2026), a
+prediction accuracy chart showing which days were called correctly, and an accuracy
+comparison table of the LSTM against the three baselines from notebook 04.
+ 
+Because the LSTM was trained on Bitcoin data only, forecasts for other coins are not
+available. Selecting an altcoin in the sidebar shows a note and defaults to the
+Bitcoin signal.
+ 
+Data sources: `data/model_outputs/lstm_predictions.csv`,
+`data/model_outputs/baseline_predictions.csv`
+ 
+### Files the app depends on
+ 
+All files below are produced by running the notebooks in order. If any file is
+missing, run the corresponding notebook first.
+ 
+| File | Produced by |
+|---|---|
+| `data/processed/crypto_wide_close_full.csv` | Notebook 01a |
+| `data/processed/crypto_features_long_aligned.csv` | Notebook 02 |
+| `data/model_outputs/hmm_regime_labels.csv` | Notebook 06 |
+| `data/model_outputs/lstm_predictions.csv` | Notebook 09 |
+| `data/model_outputs/baseline_predictions.csv` | Notebook 04 |
 
 ## MLflow Experiment Tracking
 
@@ -231,12 +348,6 @@ In notebooks, use `plt.show()` as normal.
 
 ## Notes for Collaborators
 
-- If you make any changes to the notebooks, you can export them into a script
-    ```bash
-      jupyter nbconvert --to script notebooks/NAME.ipynb --output "app_backend" --output-dir=src --TagRemovePreprocessor.enabled=True --TagRemovePreprocessor.remove_cell_tags='["noexport"]'
-    ```
-    > 👉 **Note** \
-    Any cells that shouldn't be exported into the backend should be tagged as `noexport`. Make sure the ones you do export are actually needed for the app backend.
 - If the error `ModuleNotFound` pops up, there's a dependency issue. Either there's a mismatch of package versions or a package isn't supported by the Streamlit Python version.
 - Use Conventional Commit messages when committing changes so the history remains structured and easy to read. \
   Format: `<type>: short description` \
