@@ -35,6 +35,13 @@ COIN_COLORS = {
     "TRX": "#F76F8E",
 }
 
+# Two-state HMM regime palette. Keys match the plain-language labels
+# assigned by backend.get_regime_label_map().
+REGIME_COLORS = {
+    "Low Volatility / Trending": "#00A896",
+    "High Volatility":           "#F76F8E",
+}
+
 
 def coin_color(ticker: str) -> str:
     """
@@ -55,13 +62,13 @@ def apply_plot_style() -> None:
     """
     sns.set_style("white", {
         "axes.facecolor": SURFACE,
-        "figure.facecolor": BACKGROUND,
+        "figure.facecolor": SURFACE,
         "grid.color": BORDER,
     })
 
     plt.rcParams.update({
         # Figure
-        "figure.facecolor":       BACKGROUND,
+        "figure.facecolor":       SURFACE,
         "figure.dpi":             120,
         "figure.figsize":         (12, 4),
 
