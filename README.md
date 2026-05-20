@@ -27,7 +27,6 @@ Same target across all three notebooks: **sign of BTC's average log return over 
 
 - `04`: baselines (majority class, trailing 30-day sign, logistic regression). Defines the beat-this line.
 - `07`: Random Forest and Gradient Boosting classifiers with regime context from Track B as additional features. Tests how much the regime information actually helps. Best run uses threshold calibration to reduce over-prediction.
-- `08`: portfolio backtest broken down by HMM regime. Three portfolios (BTC-only, equal-weight, BTC-heavy) compared on Sharpe ratio and diversification ratio across calm and volatile market periods.
 - `09`: LSTM on the same target. Tests whether a sequence model beats the static classifiers from `07`. Hyperparameters selected via `09b`.
 - `09b`: hyperparameter sweep over patience, recurrent dropout, and learning rate. Run once before `09`.
 
@@ -40,7 +39,67 @@ Goal: label each trading day with a market state from cross-sectional features (
 These are alternative approaches to the same labeling problem, not a chain. The outputs of Track B feed Track A as additional features.
 
 ### How the tracks connect
-The headline question is *whether altcoin diversification potential is regime-dependent*. Track B identifies the regimes while Track A uses them as context to predict BTC direction and reports per-regime accuracy. A regime-aware model that beats baseline only in low-altcoin-correlation regimes is itself a finding about diversification, not a failure.
+The headline question is *whether altcoin diversification potential is regime-dependent*. Track B identifies the regimes while Track A uses them as context to predict BTC direction and reports per-regime accuracy. Notebook `08` answers the headline question directly: a regime-conditional portfolio backtest that measures the diversification benefit (Sharpe ratio, diversification ratio) separately in each Track B regime. A regime-aware model that beats baseline only in low-altcoin correlation regimes is itself a finding about diversification.
+
+## Results
+
+This project has two modeling tracks on the same six-asset universe (Bitcoin plus ETH, SOL, XRP, BNB, TRX): Track A predicts the 30-day direction of Bitcoin, and Track B detects market regimes. The project's headline question, whether altcoin diversification is regime-dependent, is answered by a regime-conditional portfolio backtest built on the Track B regimes.
+
+**Headline finding.** The diversification benefit of holding altcoins alongside Bitcoin is not constant. It is strongly regime-dependent, an equal-weight crypto portfolio earns a Sharpe ratio of 1.21 in high-volatility regimes versus 0.50 in calm regimes, while a BTC-only portfolio shows the opposite pattern (0.26 vs 0.69). Diversification pays precisely when markets are turbulent.
+
+This is measured by a regime-conditional portfolio backtest (notebook 08): three daily-rebalanced portfolios over the full sample (May 2020 to March 2026), split by the Track B regimes.
+
+Full sample:
+
+| Portfolio | Ann. return | Ann. volatility | Sharpe | Diversification ratio |
+|---|---|---|---|---|
+| BTC only | 23.3% | 48.3% | 0.48 | 1.00 |
+| Equal weight (1/6 each) | 45.5% | 57.3% | 0.80 | 1.28 |
+| BTC heavy (60% BTC / 40% altcoins) | 35.3% | 50.2% | 0.70 | 1.20 |
+
+Sharpe ratio by regime:
+
+| Portfolio | High-volatility regime | Calm regime |
+|---|---|---|
+| BTC only | 0.26 | 0.69 |
+| Equal weight | 1.21 | 0.50 |
+| BTC heavy | 0.86 | 0.63 |
+
+The Sharpe ranking reverses between regimes. Equal-weight diversification beats BTC-only by a wide margin in the high-volatility regime and loses to it in the calm regime. The diversification ratio stays above 1 in both regimes (1.31 high-vol, 1.21 calm), so altcoins always reduce portfolio volatility, but the risk-adjusted payoff is concentrated in turbulent periods.
+
+### Track A: BTC direction prediction (notebooks 04, 07, 09)
+
+Binary task: predict the sign of Bitcoin's average log return over the next 30 trading days. Chronological 80/20 split, test period December 2024 to February 2026 (423 days). Baselines first (04), then a regime-aware Random Forest (07), then an LSTM with a lookback sweep (09, 09b).
+
+| Model | Accuracy | F1 macro |
+|---|---|---|
+| Majority class (baseline) | 44.4% | 0.31 |
+| Persistence, trailing-30d sign (baseline) | 48.7% | 0.48 |
+| Logistic regression (baseline) | 42.1% | 0.34 |
+| Random Forest, regime-aware (notebook 07) | 52.5% | 0.52 |
+| LSTM, 90-day lookback (notebook 09) | 61.0% | 0.61 |
+
+The LSTM is the strongest model, beating the hardest baseline (persistence) by 0.13 F1 and the Random Forest by 0.09 F1. Splitting its test predictions by regime shows the edge is concentrated in the high-volatility regime:
+
+| Regime | Test days | Accuracy | F1 macro |
+|---|---|---|---|
+| 0, High volatility | 46 | 78.3% | 0.75 |
+| 1, Calm | 377 | 58.9% | 0.59 |
+
+The high-volatility figure rests on only 46 test days, so it is a strong lead rather than a confirmed result.
+
+### Track B: Market regime detection (notebooks 05, 06)
+
+A Hidden Markov Model labels every trading day as one of two market regimes. K = 2 was chosen as the principled split: BIC keeps decreasing as K grows, so it does not single out a value on its own, but K = 2 maps cleanly onto the calm-versus-volatile market view, converges reliably across random restarts, and was independently confirmed by notebook 07 over K = 3 and K = 4 for predictive value. K-Means (notebook 05) is a time-agnostic cross-check on the same labeling task, and its silhouette score is highest at K = 2.
+
+| Regime | Label | Days | Share | Annualized BTC volatility |
+|---|---|---|---|---|
+| 0 | High volatility | 674 | 31% | ~65% |
+| 1 | Calm / trending | 1470 | 69% | ~38% |
+
+### Human-in-the-loop
+
+CryptoLens is a decision-support tool, not an automated trader. The model outputs (regime label, direction signal, per-regime accuracy) are surfaced to a human in the Streamlit app alongside explicit caveats, and the human makes the allocation decision.
 
 ## Repo Layout
 ```bash
