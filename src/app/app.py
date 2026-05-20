@@ -40,6 +40,7 @@ from src.app.backend import (
     get_regime_summary_table,
     load_lstm_predictions, load_baseline_predictions,
     get_btc_with_signal, get_forecast_accuracy_table,
+    get_forecast_accuracy_by_regime,
 )
 
 apply_plot_style()
@@ -826,18 +827,10 @@ with tab_forecast:
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    forecast_asset = st.selectbox(
-        label="Select a cryptocurrency to see its predicted price movement.",
-        options=selected_coins if selected_coins else ["BTC"],
-        format_func=lambda x: COIN_NAMES[x],
+    st.markdown(
+        "The forecast below is for Bitcoin. The direction model was trained on "
+        "Bitcoin data only, so a prediction for other coins is not available here."
     )
-
-    if forecast_asset != "BTC":
-        st.info(
-            f"The direction model was trained on Bitcoin data only. "
-            f"A forecast for {COIN_NAMES[forecast_asset]} is not available. "
-            "Showing Bitcoin results below."
-        )
 
     # --- Chart: BTC price with direction signal ---
     btc_full, btc_test, signal, proba = get_btc_with_signal(close_df, lstm_df)
@@ -940,3 +933,51 @@ with tab_forecast:
             + "</div>",
             unsafe_allow_html=True,
         )
+
+    # --- Per-regime accuracy: where the model's edge concentrates ---
+    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown(
+        "Does the model perform equally well in every market condition? It does not, "
+        "and that is one of its more interesting findings. The cards below split the "
+        "model's test-set accuracy by market phase, the same calm and volatile phases "
+        "shown in the Market Conditions tab."
+    )
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    regime_acc_df = get_forecast_accuracy_by_regime(lstm_df, baseline_df)
+
+    regime_cols = st.columns(len(regime_acc_df))
+    for col, (regime_id, row) in zip(regime_cols, regime_acc_df.iterrows()):
+        regime_name = label_map.get(int(regime_id), f"Regime {regime_id}")
+        with col:
+            st.markdown(
+                '<div class="card" style="min-height: 178px;">'
+                f'<div class="card-title">Regime {regime_id} · {regime_name}</div>'
+                '<div class="card-subtitle">'
+                f"Model performance on the {int(row['n'])} test days the market "
+                "spent in this phase."
+                "</div>"
+                '<div style="display:flex; gap:40px; margin-top:2px;">'
+                '<div>'
+                '<div style="font-size:1.9rem; font-weight:700; color:#1A1D2E;">'
+                f"{row['accuracy']:.1f}%</div>"
+                '<div style="font-size:0.8rem; color:#6B7280;">Accuracy</div>'
+                '</div>'
+                '<div>'
+                '<div style="font-size:1.9rem; font-weight:700; color:#1A1D2E;">'
+                f"{row['f1_macro']:.3f}</div>"
+                '<div style="font-size:0.8rem; color:#6B7280;">F1 macro</div>'
+                '</div>'
+                '</div>'
+                '</div>',
+                unsafe_allow_html=True,
+            )
+
+    n_regime0 = int(regime_acc_df.loc[0, "n"]) if 0 in regime_acc_df.index else 0
+    st.caption(
+        "Regime 0 is an uncommon, high-volatility market phase. The model looks "
+        f"much more accurate here, but the test period contains only {n_regime0} "
+        "such days, too few to confirm a real edge. If the pattern holds, that "
+        "would make it a high-value signal precisely because the phase is rare. "
+        "Until more data accumulates, treat it as a lead, not a proven opportunity."
+    )

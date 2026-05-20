@@ -433,3 +433,38 @@ def get_forecast_accuracy_table(
     })
 
     return pd.DataFrame(rows).set_index("Model")
+
+
+def get_forecast_accuracy_by_regime(
+    lstm_df: pd.DataFrame,
+    baseline_df: pd.DataFrame,
+) -> pd.DataFrame:
+    """
+    Break the LSTM's direction accuracy down by HMM market regime. The model's
+    predictive edge is not spread evenly across market conditions — it
+    concentrates in one regime — and this split is what exposes that.
+
+    Returns a DataFrame indexed by regime (int) with columns:
+    n, accuracy (%), f1_macro.
+
+    The calm regime has a small test sample (~46 days), so its metrics carry
+    wide confidence intervals; callers should surface that caveat (see 09).
+    """
+    y_true = baseline_df["y_true"]
+    aligned = pd.DataFrame({
+        "y_true": y_true,
+        "pred":   lstm_df["pred"].reindex(y_true.index),
+        "regime": lstm_df["regime"].reindex(y_true.index),
+    }).dropna()
+    aligned["pred"]   = aligned["pred"].astype(int)
+    aligned["regime"] = aligned["regime"].astype(int)
+
+    rows = []
+    for regime, sub in aligned.groupby("regime"):
+        rows.append({
+            "regime":   int(regime),
+            "n":        len(sub),
+            "accuracy": round(accuracy_score(sub["y_true"], sub["pred"]) * 100, 1),
+            "f1_macro": round(f1_score(sub["y_true"], sub["pred"], average="macro"), 3),
+        })
+    return pd.DataFrame(rows).set_index("regime").sort_index()
