@@ -157,7 +157,7 @@ python run_all.py
 
 This runs the exported notebook scripts in `scripts/` one step at a time, from
 feature engineering through the LSTM. It does not re-download market data. The terminal shows a
-one-line progress entry per step, and full per-step output is written to `logs/`.
+one-line progress entry per step. (~10min on CPU)
 
 To re-download the raw market data from yfinance before running the pipeline:
 

@@ -209,6 +209,9 @@ __marimo__/
 # App Logs
 src/logs/*
 
+# Pipeline run logs (run_all.py)
+logs/
+
 # Keep empty folders visible
 !src/logs/.gitkeep
 
