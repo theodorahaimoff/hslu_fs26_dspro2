@@ -108,6 +108,8 @@ HSLU_FS26_DSPRO2/
 ├── requirements.txt
 ├── .python-version             # pins Python 3.12 for Streamlit Community Cloud
 ├── .gitignore
+├── run_all.py                  # runs the full modeling pipeline
+├── run_app.py                  # launches the CryptoLens Streamlit dashboard
 ├── mlflow_utils.py             # shared MLflow experiment configuration
 ├── .streamlit/
 │   └── config.toml             # contains Streamlit global configuration
@@ -116,6 +118,7 @@ HSLU_FS26_DSPRO2/
 │   ├── processed/              # cleaned and feature-engineered datasets
 │   └── model_outputs/          # predictions, regime labels, cluster assignments
 ├── notebooks/                  # exploration, experiments, prototyping
+├── scripts/                    # standalone .py exports of the notebooks, run by run_all.py
 ├── src/
 │   ├── features/
 │   │   └── daily.py            # shared daily feature aggregation used by notebooks 05, 06, 07, 09                
@@ -143,6 +146,28 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 ```
+
+### Reproduce the results
+
+With the virtual environment active, run the full modeling pipeline:
+
+```bash
+python run_all.py
+```
+
+This runs the exported notebook scripts in `scripts/` one step at a time, from
+feature engineering through the LSTM. It does not re-download market data. The terminal shows a
+one-line progress entry per step, and full per-step output is written to `logs/`.
+
+To re-download the raw market data from yfinance before running the pipeline:
+
+```bash
+python run_all.py --refresh_data
+```
+
+Once the pipeline has run, launch the dashboard with
+`python run_app.py` (see CryptoLens section below)
+
 ## CryptoLens Streamlit App
  
 CryptoLens is the interactive front end for this project. It reads the pre-computed
@@ -168,14 +193,16 @@ update a data source or preprocessing step without touching the layout.
  
 ### Running the app
  
-Make sure the virtual environment is active and all notebooks up to 09 have been
-run at least once so the processed CSV files exist. Then, from the project root:
+Make sure the virtual environment is active and the modeling pipeline has run
+ (`python run_all.py`) so the model output files exist. Then, from the
+project root:
  
 ```bash
-streamlit run src/app/app.py
+python run_app.py
 ```
  
-The app will open in your default browser at `http://localhost:8501`.
+`run_app.py` checks that the required data files are present and then starts
+Streamlit. The app opens in your default browser at `http://localhost:8501`.
  
 ### Sidebar controls
  
