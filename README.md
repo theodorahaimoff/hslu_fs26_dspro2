@@ -27,7 +27,7 @@ Same target across all three notebooks: **sign of BTC's average log return over 
 
 - `04`: baselines (majority class, trailing 30-day sign, logistic regression). Defines the beat-this line.
 - `07`: Random Forest and Gradient Boosting classifiers with regime context from Track B as additional features. Tests how much the regime information actually helps. Best run uses threshold calibration to reduce over-prediction.
-- `09`: LSTM on the same target. Tests whether a sequence model beats the static classifiers from `07`. Hyperparameters selected via `09b`.
+- `09`: LSTM on the same target, using the base features plus the HMM regime label and state probabilities. Tests whether a sequence model beats the static classifiers from `07`. Hyperparameters selected via `09b`.
 - `09b`: hyperparameter sweep over patience, recurrent dropout, and learning rate. Run once before `09`.
 
 ### Track B — Unsupervised regime detection (05, 06)
@@ -36,10 +36,10 @@ Goal: label each trading day with a market state from cross-sectional features (
 - `05` — K-Means. Treats each day as independent.
 - `06` — HMM. Same labeling task, but explicitly models state persistence and transition probabilities.
 
-These are alternative approaches to the same labeling problem, not a chain. The outputs of Track B feed Track A as additional features.
+These are alternative approaches to the same labeling problem, not a chain. Track B's regime labels and HMM state probabilities are used as additional input features by the regime-aware models in Track A (notebooks 07 and 09). The baseline models in notebook 04 are regime-free and set the comparison bar before any regime information is introduced.
 
 ### How the tracks connect
-The headline question is *whether altcoin diversification potential is regime-dependent*. Track B identifies the regimes while Track A uses them as context to predict BTC direction and reports per-regime accuracy. Notebook `08` answers the headline question directly: a regime-conditional portfolio backtest that measures the diversification benefit (Sharpe ratio, diversification ratio) separately in each Track B regime. A regime-aware model that beats baseline only in low-altcoin correlation regimes is itself a finding about diversification.
+The headline question is *whether altcoin diversification potential is regime-dependent*. Track B identifies the regimes while Track A uses them as context to predict BTC direction and reports per-regime accuracy. Notebook `08` answers the headline question directly: a regime-conditional portfolio backtest that measures the diversification benefit (Sharpe ratio, diversification ratio) separately in each Track B regime. Track A's per-regime prediction accuracy and notebook 08's per-regime portfolio backtest are both reported on the same Track B regimes, so the two tracks describe the same market states from two angles: predictability and diversification benefit.
 
 ## Results
 
@@ -69,7 +69,7 @@ The Sharpe ranking reverses between regimes. Equal-weight diversification beats 
 
 ### Track A: BTC direction prediction (notebooks 04, 07, 09)
 
-Binary task: predict the sign of Bitcoin's average log return over the next 30 trading days. Chronological 80/20 split, test period December 2024 to February 2026 (423 days). Baselines first (04), then a regime-aware Random Forest (07), then an LSTM with a lookback sweep (09, 09b).
+Binary task: predict the sign of Bitcoin's average log return over the next 30 trading days. Chronological 80/20 split, test period December 2024 to February 2026 (423 days). Baselines first (04), then a regime-aware Random Forest (07), then a regime-aware LSTM with a lookback sweep (09, 09b).
 
 | Model | Accuracy | F1 macro |
 |---|---|---|
