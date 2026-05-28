@@ -33,8 +33,8 @@ Same target across all three notebooks: **sign of BTC's average log return over 
 ### Track B — Unsupervised regime detection (05, 06)
 Goal: label each trading day with a market state from cross-sectional features (volatility, BTC-correlation, dispersion across the 5 altcoins).
 
-- `05` — K-Means. Treats each day as independent.
-- `06` — HMM. Same labeling task, but explicitly models state persistence and transition probabilities.
+- `05`: K-Means. Treats each day as independent.
+- `06`: HMM. Same labeling task, but explicitly models state persistence and transition probabilities.
 
 These are alternative approaches to the same labeling problem, not a chain. Track B's regime labels and HMM state probabilities are used as additional input features by the regime-aware models in Track A (notebooks 07 and 09). The baseline models in notebook 04 are regime-free and set the comparison bar before any regime information is introduced.
 
