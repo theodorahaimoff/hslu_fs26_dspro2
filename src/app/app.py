@@ -4,19 +4,56 @@
 # Run from the project root with:
 #   streamlit run src/app/app.py
 #
-# Cards are rendered as plain HTML divs. Charts use Plotly and are embedded
-# inside the card iframe via st.components.v1.html().
+# ============================================================================
+# ARCHITECTURE OVERVIEW
+# ============================================================================
 #
-# Problem: Streamlit renders ALL tab content at page load, even hidden tabs.
-# Hidden iframes have width=0, so Plotly draws the legend against a zero-
-# width figure and clips it.
+# Layout
+# ------
+# The page has a sidebar for global user inputs (coin selection, date range)
+# and five content tabs, each focusing on one aspect of the analysis:
+#   Tab 1 - Price History      : raw prices and CHF 100 growth simulation
+#   Tab 2 - Risk Overview      : volatility, drawdown, daily return spread
+#   Tab 3 - Coin Independence  : rolling BTC correlation and independence table
+#   Tab 4 - Market Conditions  : HMM regime detection, regime stats table
+#   Tab 5 - Price Forecast     : LSTM direction signal and accuracy breakdown
 #
-# Fix: each iframe uses a ResizeObserver on document.body. It fires once
-# when the body grows from width=0 to its real width, which is the exact
-# moment the user switches to that tab. A waitForPlotly loop ensures
-# Plotly.js (loaded from CDN) is ready before the resize is called.
-# After the first correct render the observer disconnects, so subsequent
-# tab switches use the already-correct chart as-is.
+# Cards
+# -----
+# Two types of card are used throughout:
+#
+#   plotly_card()  -- for charts. Renders a Plotly figure inside an <iframe>
+#                     so that Plotly.js is isolated from Streamlit's DOM.
+#                     The iframe auto-sizes its height via a postMessage to
+#                     Streamlit after the chart is drawn (see _RESIZE_SCRIPT).
+#
+#   st.markdown()  -- for tables and text-only cards. Uses the .card CSS class
+#                     defined in the global <style> block injected at startup.
+#
+# Hidden-tab rendering problem (and fix)
+# ---------------------------------------
+# Streamlit renders ALL tab content at page load, even inactive tabs.
+# Hidden iframes have width=0, so Plotly draws charts against a zero-width
+# figure and clips them. Fix: each iframe uses a ResizeObserver on
+# document.body. It fires once when the body grows from width=0 to its real
+# width, i.e. exactly when the user switches to that tab. A waitForPlotly
+# loop ensures Plotly.js is ready before the resize is triggered. After the
+# first correct render the observer disconnects, so subsequent tab switches
+# use the already-correct chart unchanged.
+#
+# Design tokens
+# -------------
+# All brand colors, font sizes, and spacing live in two places:
+#   _CARD_CSS        -- injected into every plotly_card iframe
+#   st.markdown CSS  -- global Streamlit stylesheet (injected once at startup)
+# Both define the same .card / .card-title / .card-subtitle classes so that
+# iframe cards and native st.markdown cards look identical.
+# Brand palette:
+#   #1A1D2E  dark navy   -- primary text
+#   #5B6EF5  indigo      -- accent / logo highlight
+#   #A096FF  soft purple -- borders
+#   #EDE9F7  light lilac -- subcard backgrounds, badge fills
+#   #6B7280  slate grey  -- secondary text / subtitles
 
 import re
 import sys
@@ -48,6 +85,8 @@ apply_plot_style()
 # ---------------------------------------------------------------------------
 # Plotly brand defaults
 # ---------------------------------------------------------------------------
+# _PLOTLY_BASE_LAYOUT is applied to every figure via _apply_brand().
+# Keeping it here in one place means a single edit propagates to all charts.
 
 _PLOTLY_BASE_LAYOUT = dict(
     plot_bgcolor="#FFFFFF",
@@ -79,12 +118,17 @@ def _apply_brand(fig, yaxis_title: str = "", hovermode: str = "x unified") -> No
 
 
 # ---------------------------------------------------------------------------
-# Card CSS and resize script
+# Card CSS (injected into every plotly_card iframe)
 # ---------------------------------------------------------------------------
+# Uses the standard system font stack so the iframe resolves to the same
+# typeface as Streamlit's own page, keeping iframe and native card headings
+# visually consistent. Do not add a Google Fonts @import here -- loading an
+# external web font into the iframe will make headings render at a different
+# weight and size than the Streamlit-native cards below them.
 
 _CARD_CSS = """
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { background: transparent; font-family: sans-serif; }
+body { background: transparent; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
 .card {
     background: #FFFFFF;
     border: 1px solid #A096FF;
@@ -105,22 +149,28 @@ body { background: transparent; font-family: sans-serif; }
 }
 """
 
-# How the resize script works:
+# ---------------------------------------------------------------------------
+# Iframe resize script
+# ---------------------------------------------------------------------------
+# Injected into every plotly_card iframe. Handles two problems:
 #
-# 1. waitForPlotlyThenResize() polls for window.Plotly every 150ms.
-#    Once Plotly.js is ready it calls Plotly.Plots.resize() on every
-#    chart in the iframe and posts the card height to Streamlit.
+# 1. Auto-height: sendHeight() reads card.scrollHeight and posts it to
+#    Streamlit via postMessage so the iframe shrinks or grows to fit its
+#    content without a scrollbar.
 #
-# 2. Two immediate setTimeout calls handle Tab 1 which is visible on
-#    page load -- Plotly.js loads quickly because the tab is active.
+# 2. Hidden-tab chart rendering: waitForPlotlyThenResize() polls until
+#    Plotly.js is available, then calls Plotly.Plots.resize() on every
+#    chart in the iframe. This corrects charts that were drawn at width=0
+#    while the tab was hidden.
 #
-# 3. A ResizeObserver watches document.body. When a hidden tab is
-#    shown, the iframe body grows from width=0 to its real width.
-#    The observer fires, waits for Plotly, then resizes. After the
-#    first successful resize it disconnects so it never fires again.
-#    Subsequent tab switches use the already-correctly-rendered chart.
-#
-# 4. A setInterval fallback handles browsers without ResizeObserver.
+# Timing:
+#   - Two immediate setTimeouts handle Tab 1 which is visible on page load.
+#   - A ResizeObserver fires when the iframe body gains real width (i.e.
+#     the user switches to a hidden tab) and triggers a resize. It
+#     disconnects after the first successful resize so later tab switches
+#     leave the chart as-is.
+#   - A setInterval fallback serves browsers without ResizeObserver.
+
 _RESIZE_SCRIPT = """
 <script>
 function sendHeight() {
@@ -176,14 +226,35 @@ if (window.ResizeObserver) {
 """
 
 
-def plotly_card(title: str, subtitle: str, fig, chart_height: int = 380) -> None:
+def plotly_card(
+    title: str,
+    subtitle: str,
+    fig,
+    chart_height: int = 380,
+    note: str = "",
+    min_height: int = 0,
+) -> None:
     """
     Render a Plotly figure inside a styled white card using an iframe.
 
-    The chart width always fills the container. chart_height sets the plot
-    area height. The iframe auto-sizes via postMessage. The resize script
-    ensures charts in hidden tabs re-render correctly the first time the
-    user switches to that tab.
+    Parameters
+    ----------
+    title : str
+        Bold heading shown at the top of the card.
+    subtitle : str
+        Muted description shown below the title. Supports basic HTML (e.g. <br>).
+    fig : plotly.graph_objects.Figure
+        The Plotly figure to render. Its height is set to chart_height.
+    chart_height : int
+        Height of the Plotly plot area in pixels. Does not affect the overall
+        card height directly -- use min_height for that.
+    note : str
+        Optional HTML string injected below the chart, inside the card.
+        Intended for disclaimers or contextual info that belongs inside the card.
+    min_height : int
+        CSS min-height applied to the card div. The sendHeight script measures
+        card.scrollHeight, so the iframe expands to at least this value.
+        Useful for keeping side-by-side cards the same height as their neighbour.
     """
     fig.update_layout(height=chart_height)
 
@@ -194,23 +265,34 @@ def plotly_card(title: str, subtitle: str, fig, chart_height: int = 380) -> None
         config={"responsive": True, "displayModeBar": False},
     )
 
+    note_html = f"\n  {note}" if note else ""
+    card_style = f' style="min-height:{min_height}px;"' if min_height else ""
+    note_extra = 80 if note else 0
+    # Use the larger of (chart height + fixed overhead) and (explicit min height)
+    # as the initial iframe height to avoid a flash of scrollbar before
+    # the postMessage auto-size fires.
+    frame_height = max(chart_height + 140 + note_extra, min_height + 8)
+
     html = f"""<!DOCTYPE html>
 <html><head><style>{_CARD_CSS}</style></head>
 <body>
-<div class="card" id="main-card">
+<div class="card" id="main-card"{card_style}>
   <div class="card-title">{title}</div>
   <div class="card-subtitle">{subtitle}</div>
-  {chart_html}
+  {chart_html}{note_html}
 </div>
 {_RESIZE_SCRIPT}
 </body></html>"""
 
-    components.html(html, height=chart_height + 140, scrolling=True)
+    components.html(html, height=frame_height, scrolling=True)
 
 
 # ---------------------------------------------------------------------------
 # Logo
 # ---------------------------------------------------------------------------
+# The SVG logo is loaded from disk once and cached. Two sizes are prepared:
+#   LOGO_SM (26px) -- used in the sidebar
+#   LOGO_LG (36px) -- used in the main page header
 
 @st.cache_data
 def load_svg_logo(size: int = 32) -> str:
@@ -237,8 +319,18 @@ st.set_page_config(
 )
 
 # ---------------------------------------------------------------------------
-# Custom CSS
+# Global stylesheet
 # ---------------------------------------------------------------------------
+# Injected once into the Streamlit page. Defines:
+#   .card / .card-title / .card-subtitle  -- shared with _CARD_CSS so that
+#       st.markdown cards and plotly_card iframe cards look identical.
+#   .card-table                           -- HTML tables rendered inside cards.
+#   .asset-badge                          -- purple pill labels (coin tickers,
+#       regime tags). Reused across tabs wherever a short label is needed.
+#   .app-logo / .app-tagline              -- main page header typography.
+#   .disclaimer                           -- small footer text in the sidebar.
+#   Streamlit component overrides         -- custom tab strip, metric cards,
+#       sidebar background, and dropdown option hiding.
 
 st.markdown(
     """
@@ -283,6 +375,7 @@ st.markdown(
             font-weight: 600;
             color: #1A1D2E;
         }
+        /* Custom pill-style tab strip */
         .stTabs [data-baseweb="tab-list"] {
             gap: 2px;
             background-color: #ede9f7;
@@ -306,6 +399,7 @@ st.markdown(
             color: #1A1D2E !important;
             box-shadow: 0 1px 4px rgba(0,0,0,0.08);
         }
+        /* Card component -- used by st.markdown cards and mirrored in _CARD_CSS */
         .card {
             background-color: #FFFFFF;
             border: 1px solid #A096FF;
@@ -325,6 +419,7 @@ st.markdown(
             color: #6B7280;
             margin-bottom: 1rem;
         }
+        /* Table rendered inside a card via DataFrame.to_html() */
         .card-table {
             width: 100%;
             border-collapse: collapse;
@@ -339,7 +434,7 @@ st.markdown(
             border-bottom: 1px solid #A096FF;
         }
         /* Index cells in the tbody (e.g. regime names, model names) should
-         * look like regular bold content, not like a second header row. */
+         * look like bold content rows, not a second header row. */
         .card-table tbody th {
             text-align: left;
             padding: 6px 12px;
@@ -348,6 +443,7 @@ st.markdown(
         }
         .card-table td { padding: 6px 12px; }
         .card-table tr:nth-child(even) td { background-color: #f9f7fc; }
+        /* Hide the first two default options Streamlit adds to every dropdown */
         [data-baseweb="menu"] [role="option"]:first-child,
         [data-baseweb="menu"] [role="option"]:nth-child(2) {
             display: none !important;
@@ -356,6 +452,7 @@ st.markdown(
             background-color: #FFFFFF;
             border-right: 1px solid #A096FF;
         }
+        /* Purple pill label -- used for coin tickers and regime tags */
         .asset-badge {
             display: inline-block;
             background-color: #ede9f7;
@@ -379,8 +476,10 @@ st.markdown(
 )
 
 # ---------------------------------------------------------------------------
-# Sidebar
+# Sidebar -- global user inputs
 # ---------------------------------------------------------------------------
+# selected_coins always starts with "BTC" (the reference coin).
+# date_range is a two-element list [start, end] of pd.Timestamps.
 
 COIN_NAMES = {
     "BTC": "Bitcoin (BTC)",
@@ -427,6 +526,15 @@ if len(date_range) < 2:
 # ---------------------------------------------------------------------------
 # Data loading
 # ---------------------------------------------------------------------------
+# All data is loaded once at startup. Streamlit caches these calls
+# automatically via @st.cache_data decorators in backend.py.
+#
+#   close_df    -- wide DataFrame of daily closing prices (columns = coins)
+#   features_df -- long DataFrame of engineered features (one row per coin/day)
+#   hmm_df      -- HMM regime label per date (column: hmm_regime)
+#   lstm_df     -- LSTM model predictions (columns: pred, proba)
+#   baseline_df -- baseline model predictions for comparison (columns: pred, y_true)
+#   label_map   -- dict mapping integer regime id -> human-readable label string
 
 close_df    = load_close_prices()
 features_df = load_features_long()
@@ -462,7 +570,7 @@ if selected_coins:
 st.markdown("<br>", unsafe_allow_html=True)
 
 # ---------------------------------------------------------------------------
-# Tabs
+# Tab layout
 # ---------------------------------------------------------------------------
 
 tab_overview, tab_risk, tab_independence, tab_conditions, tab_forecast = st.tabs(
@@ -472,6 +580,12 @@ tab_overview, tab_risk, tab_independence, tab_conditions, tab_forecast = st.tabs
 # ===========================================================================
 # TAB 1: Price History
 # ===========================================================================
+# Shows raw closing prices and a CHF 100 growth simulation for the coins
+# selected in the sidebar over the chosen date range.
+#
+# Backend functions used:
+#   filter_close()      -- slices close_df to selected_coins and date_range
+#   normalize_to_100()  -- rebases prices so the first value = CHF 100
 
 with tab_overview:
 
@@ -489,7 +603,7 @@ with tab_overview:
 
     filtered_close = filter_close(close_df, selected_coins, date_range)
 
-    # --- Chart 1: Raw close prices ---
+    # --- Chart: Raw close prices ---
     fig = go.Figure()
     for coin in filtered_close.columns:
         fig.add_trace(go.Scatter(
@@ -511,7 +625,9 @@ with tab_overview:
         chart_height=380,
     )
 
-    # --- Chart 2: CHF 100 normalized growth ---
+    # --- Chart: CHF 100 normalized growth ---
+    # All coins are rebased to 100 at the start of the selected period so
+    # percentage growth can be compared on the same axis regardless of price.
     normalized = normalize_to_100(filtered_close)
     fig = go.Figure()
     fig.add_hline(y=100, line=dict(color="#6B7280", width=0.8, dash="dash"))
@@ -538,6 +654,17 @@ with tab_overview:
 # ===========================================================================
 # TAB 2: Risk Overview
 # ===========================================================================
+# Quantifies how risky each coin is using three complementary views:
+#   1. Summary table  -- single risk label per coin (Low / Medium / High)
+#   2. Rolling volatility chart  -- 30-day annualised volatility over time
+#   3. Max drawdown bar chart    -- biggest peak-to-trough drop ever recorded
+#   4. Daily log return box plot -- spread and outliers of daily returns
+#
+# Backend functions used:
+#   compute_risk_summary()   -- risk label table
+#   get_rolling_volatility() -- 30-day rolling vol per coin per date
+#   compute_max_drawdown()   -- worst historical drawdown per coin
+#   get_log_returns_wide()   -- daily log returns in wide format
 
 with tab_risk:
 
@@ -589,7 +716,7 @@ with tab_risk:
 
     col_left, col_right = st.columns(2)
 
-    # --- Chart: Max drawdown ---
+    # --- Chart: Max drawdown (horizontal bar) ---
     drawdown_df = compute_max_drawdown(close_df, selected_coins)
     fig = go.Figure()
     fig.add_trace(go.Bar(
@@ -618,6 +745,8 @@ with tab_risk:
         )
 
     # --- Chart: Daily log return box plot ---
+    # Box width represents the typical daily return range (IQR).
+    # Individual dots beyond the whiskers are single-day outlier moves.
     returns_wide = get_log_returns_wide(features_df, selected_coins, date_range)
     fig = go.Figure()
     for coin in returns_wide.columns:
@@ -649,6 +778,12 @@ with tab_risk:
 # ===========================================================================
 # TAB 3: Coin Independence
 # ===========================================================================
+# Shows how closely each altcoin follows Bitcoin, which determines whether
+# holding it alongside BTC actually spreads risk.
+#
+# Backend functions used:
+#   get_coin_independence_table()  -- per-coin independence rating table
+#   get_rolling_btc_correlation()  -- 30-day rolling Pearson correlation vs BTC
 
 with tab_independence:
 
@@ -675,6 +810,8 @@ with tab_independence:
     )
 
     # --- Chart: Rolling BTC correlation ---
+    # If no altcoin is selected the chart cannot be drawn (BTC vs BTC = 100%).
+    # In that case a placeholder card is shown instead.
     corr_wide = get_rolling_btc_correlation(features_df, selected_coins, date_range)
     if corr_wide.empty:
         st.markdown(
@@ -719,6 +856,14 @@ with tab_independence:
 # ===========================================================================
 # TAB 4: Market Conditions
 # ===========================================================================
+# Uses Hidden Markov Model (HMM) regime labels to classify each trading day
+# as either High Volatility or Low Volatility / Trending. Shows the current
+# regime, a historical chart with colored regime bands, and an average stats
+# table per regime.
+#
+# Backend functions used:
+#   get_current_regime_info()  -- current regime label and how long it has lasted
+#   get_regime_summary_table() -- avg daily return and avg volatility per regime
 
 with tab_conditions:
 
@@ -734,6 +879,9 @@ with tab_conditions:
     st.markdown("<br>", unsafe_allow_html=True)
 
     # --- Chart: BTC price with regime bands ---
+    # Approach: iterate over the HMM label series and draw a vrect for each
+    # consecutive block of the same regime. The BTC price trace is added first
+    # so Plotly sets the x-axis type to datetime before the vrects are drawn.
     btc_close = close_df["BTC"].dropna()
     regime_dates = hmm_df.index
     regime_labels_series = hmm_df["hmm_regime"].map(label_map)
@@ -813,6 +961,14 @@ with tab_conditions:
 # ===========================================================================
 # TAB 5: Price Forecast
 # ===========================================================================
+# Shows the output of the LSTM direction model: which days it predicted up
+# or down, how often it was correct, how it compares to simple baselines,
+# and how its accuracy breaks down by HMM market regime.
+#
+# Backend functions used:
+#   get_btc_with_signal()          -- full BTC price series + test-period signals
+#   get_forecast_accuracy_table()  -- accuracy / F1 for LSTM vs baselines
+#   get_forecast_accuracy_by_regime() -- per-regime accuracy breakdown
 
 with tab_forecast:
 
@@ -821,18 +977,16 @@ with tab_forecast:
     )
 
     st.info(
-        "This prediction indicates the direction (up or down), not the exact price. It doesn’t consider news, regulations, or unexpected events. Use it as a general guideline, not a certainty.",
+        "This prediction indicates the direction (up or down), not the exact price. It doesn't consider news, regulations, or unexpected events. Use it as a general guideline, not a certainty.",
         icon=None,
     )
 
     st.markdown("<br>", unsafe_allow_html=True)
 
-    st.markdown(
-        "The forecast below is for Bitcoin. The direction model was trained on "
-        "Bitcoin data only, so a prediction for other coins is not available here."
-    )
-
     # --- Chart: BTC price with direction signal ---
+    # Full price history shown as a line. Test-period predictions are overlaid
+    # as colored scatter dots (green = predicted up, red = predicted down).
+    # The note inside the card flags that the model is BTC-only.
     btc_full, btc_test, signal, proba = get_btc_with_signal(close_df, lstm_df)
 
     fig = go.Figure()
@@ -863,19 +1017,42 @@ with tab_forecast:
         showlegend=False,
     ))
     _apply_brand(fig, yaxis_title="BTC Price (USD)", hovermode="x")
+
+    # Note rendered inside the chart card below the plot.
+    # Uses the same inline SVG info-icon style as the regime subcard notes.
+    _BTC_NOTE = (
+        '<div style="margin-top:14px; padding-top:12px; border-top:1px solid #EDE9F7;'
+        ' display:flex; gap:8px; align-items:flex-start;">'
+        '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"'
+        ' style="flex-shrink:0; margin-top:2px;">'
+        '<circle cx="7" cy="7" r="6.25" stroke="#6B7280" stroke-width="1.25"/>'
+        '<text x="7" y="10.8" text-anchor="middle" font-size="8"'
+        ' fill="#6B7280" font-family="sans-serif" font-style="italic">i</text>'
+        '</svg>'
+        '<div style="font-size:0.82rem; color:#6B7280; line-height:1.5;">'
+        "This model was trained on Bitcoin data only. "
+        "A directional prediction for other coins is not available."
+        "</div>"
+        "</div>"
+    )
+
     plotly_card(
         title="Bitcoin price with model direction signal",
         subtitle=(
-            "This chart shows Bitcoin's recent price (blue line). The colored dots during the test period (from December 2024 onward) show the model’s prediction: <br>"
+            "This chart shows Bitcoin\u2019s recent price (blue line). The colored dots during the test period (from December 2024 onward) show the model\u2019s prediction: <br>"
             "Green = predicted up over next 30 days, Red = predicted down."
         ),
         fig=fig,
         chart_height=400,
+        note=_BTC_NOTE,
     )
 
     col_left, col_right = st.columns(2)
 
-    # --- Chart: Predicted vs actual direction ---
+    # --- Chart: Predicted vs actual direction (left column) ---
+    # Each day in the test period is a bar: green if the prediction was correct,
+    # red if it was wrong. min_height matches the right column card so both
+    # cards are the same height regardless of content.
     y_true = baseline_df["y_true"]
     lstm_preds = lstm_df["pred"].reindex(y_true.index).dropna().astype(int)
     y_true_aligned = y_true.reindex(lstm_preds.index)
@@ -906,14 +1083,17 @@ with tab_forecast:
         plotly_card(
             title="How accurate has this model been in the past?",
             subtitle=(
-                "This chart shows how often the model correctly predicted whether Bitcoin's price went up or down each day in the past. <br>"
+                "This chart shows how often the model correctly predicted whether Bitcoin\u2019s price went up or down each day in the past. <br>"
                 "Green = the model predicted the correct direction, Red = incorrect."
             ),
             fig=fig,
             chart_height=300,
+            min_height=470,
         )
 
-    # --- Table: Accuracy comparison ---
+    # --- Table: Accuracy comparison (right column) ---
+    # Compares LSTM against three baselines: majority class, momentum/persistence,
+    # and logistic regression. min-height keeps both columns the same height.
     accuracy_df = get_forecast_accuracy_table(lstm_df, baseline_df)
     accuracy_display = accuracy_df.copy()
     accuracy_display.index.name = None
@@ -922,10 +1102,10 @@ with tab_forecast:
     )
     with col_right:
         st.markdown(
-            '<div class="card">'
+            '<div class="card" style="min-height: 470px;">'
             '<div class="card-title">How does the model compare to simple alternatives?</div>'
             '<div class="card-subtitle">'
-            "This table compares how well different methods predict Bitcoin’s price movement:"
+            "This table compares how well different methods predict Bitcoin\u2019s price movement:"
             "The accuracy shows how often the method was correct and the F1 score measures how balanced the predictions are between rising and falling prices."
             "Higher numbers mean better predictions. "
             "</div>"
@@ -934,50 +1114,83 @@ with tab_forecast:
             unsafe_allow_html=True,
         )
 
-    # --- Per-regime accuracy: where the model's edge concentrates ---
-    st.markdown("<br>", unsafe_allow_html=True)
-    st.markdown(
-        "Does the model perform equally well in every market condition? It does not, "
-        "and that is one of its more interesting findings. The cards below split the "
-        "model's test-set accuracy by market phase, the same calm and volatile phases "
-        "shown in the Market Conditions tab."
-    )
+    # --- Per-regime accuracy breakdown ---
+    # One outer card with the question as the heading, two subcards inside
+    # (one per HMM regime). Regime 0 gets an inline info note because its
+    # sample size is small and its high accuracy may not be reliable.
     st.markdown("<br>", unsafe_allow_html=True)
 
     regime_acc_df = get_forecast_accuracy_by_regime(lstm_df, baseline_df)
-
-    regime_cols = st.columns(len(regime_acc_df))
-    for col, (regime_id, row) in zip(regime_cols, regime_acc_df.iterrows()):
-        regime_name = label_map.get(int(regime_id), f"Regime {regime_id}")
-        with col:
-            st.markdown(
-                '<div class="card" style="min-height: 178px;">'
-                f'<div class="card-title">Regime {regime_id} · {regime_name}</div>'
-                '<div class="card-subtitle">'
-                f"Model performance on the {int(row['n'])} test days the market "
-                "spent in this phase."
-                "</div>"
-                '<div style="display:flex; gap:40px; margin-top:2px;">'
-                '<div>'
-                '<div style="font-size:1.9rem; font-weight:700; color:#1A1D2E;">'
-                f"{row['accuracy']:.1f}%</div>"
-                '<div style="font-size:0.8rem; color:#6B7280;">Accuracy</div>'
-                '</div>'
-                '<div>'
-                '<div style="font-size:1.9rem; font-weight:700; color:#1A1D2E;">'
-                f"{row['f1_macro']:.3f}</div>"
-                '<div style="font-size:0.8rem; color:#6B7280;">F1 macro</div>'
-                '</div>'
-                '</div>'
-                '</div>',
-                unsafe_allow_html=True,
-            )
-
     n_regime0 = int(regime_acc_df.loc[0, "n"]) if 0 in regime_acc_df.index else 0
-    st.caption(
-        "Regime 0 is an uncommon, high-volatility market phase. The model looks "
-        f"much more accurate here, but the test period contains only {n_regime0} "
-        "such days, too few to confirm a real edge. If the pattern holds, that "
-        "would make it a high-value signal precisely because the phase is rare. "
-        "Until more data accumulates, treat it as a lead, not a proven opportunity."
+
+    # Reusable inline SVG info-icon. Rendered in muted grey to match the
+    # card-subtitle color so it reads as part of the note text, not a CTA.
+    _INFO_ICON = (
+        '<svg width="14" height="14" viewBox="0 0 14 14" fill="none" '
+        'style="flex-shrink:0; margin-top:2px;">'
+        '<circle cx="7" cy="7" r="6.25" stroke="#6B7280" stroke-width="1.25"/>'
+        '<text x="7" y="10.8" text-anchor="middle" font-size="8" '
+        'fill="#6B7280" font-family="sans-serif" font-style="italic">i</text>'
+        '</svg>'
+    )
+
+    # Build a subcard HTML string for each regime. Regime 0 gets an extra
+    # note div below the stats to warn that the sample is too small to
+    # treat the accuracy as a confirmed edge.
+    subcard_html = ""
+    for regime_id, row in regime_acc_df.iterrows():
+        regime_name = label_map.get(int(regime_id), f"Regime {regime_id}")
+        note_html = ""
+        if int(regime_id) == 0:
+            note_html = (
+                '<div style="margin-top:14px; padding-top:12px; '
+                'border-top:1px solid #EDE9F7; display:flex; gap:8px; align-items:flex-start;">'
+                + _INFO_ICON
+                + '<div style="font-size:0.82rem; color:#6B7280; line-height:1.5;">'
+                f"Uncommon phase &mdash; only {n_regime0} test days, too few to confirm "
+                "a real edge. If the pattern holds it would be a high-value signal. "
+                "Until more data accumulates, treat it as a lead, not a proven opportunity."
+                "</div>"
+                "</div>"
+            )
+        subcard_html += (
+            '<div style="background:#F9F7FC; border:1px solid #EDE9F7; '
+            'border-radius:8px; padding:16px 18px; flex:1; min-width:0;">'
+            f'<div class="asset-badge" style="margin-bottom:8px;">Regime {regime_id}</div>'
+            f'<div class="card-title">{regime_name}</div>'
+            '<div class="card-subtitle">'
+            f"Model performance on the {int(row['n'])} test days "
+            "the market spent in this phase."
+            "</div>"
+            '<div style="display:flex; gap:40px; margin-top:10px;">'
+            '<div>'
+            '<div style="font-size:1.9rem; font-weight:700; color:#1A1D2E;">'
+            f"{row['accuracy']:.1f}%</div>"
+            '<div style="font-size:0.8rem; color:#6B7280;">Accuracy</div>'
+            '</div>'
+            '<div>'
+            '<div style="font-size:1.9rem; font-weight:700; color:#1A1D2E;">'
+            f"{row['f1_macro']:.3f}</div>"
+            '<div style="font-size:0.8rem; color:#6B7280;">F1 macro</div>'
+            '</div>'
+            '</div>'
+            + note_html
+            + '</div>'
+        )
+
+    st.markdown(
+        '<div class="card">'
+        '<div class="card-title">'
+        "Does the model perform equally well in every market condition?"
+        "</div>"
+        '<div class="card-subtitle">'
+        "It does not, and that is one of its more interesting findings. The cards below "
+        "split the model\u2019s test-set accuracy by market phase, the same calm and volatile "
+        "phases shown in the Market Conditions tab."
+        "</div>"
+        '<div style="display:flex; gap:12px; margin-top:4px;">'
+        + subcard_html
+        + "</div>"
+        "</div>",
+        unsafe_allow_html=True,
     )
