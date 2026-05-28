@@ -14,8 +14,8 @@ Assets analyzed:
 - BNB-USD (Binance Coin)
 - TRX-USD (Tron)
 
-Data frequency: daily  \
-Start date: 2017-01-01 \
+Data frequency: daily \
+Start date: 2017-01-01 for Bitcoin (full closing price history). All six coins are available from April 2020 onward, which is the start date used for all feature-based analysis and modeling. \
 Currency: USD
 
 ## Modeling Strategy
@@ -37,6 +37,9 @@ Goal: label each trading day with a market state from cross-sectional features (
 - `06`: HMM. Same labeling task, but explicitly models state persistence and transition probabilities.
 
 These are alternative approaches to the same labeling problem, not a chain. Track B's regime labels and HMM state probabilities are used as additional input features by the regime-aware models in Track A (notebooks 07 and 09). The baseline models in notebook 04 are regime-free and set the comparison bar before any regime information is introduced.
+
+### Notebook 03 — Exploratory Data Analysis
+Notebook 03 is a standalone exploratory analysis of the raw price data and engineered features. It does not produce any output files that downstream notebooks depend on and has no corresponding script in `scripts/`. It is not executed by `run_all.py`. Its purpose is to support understanding of the data before modeling begins. Macro factor colors (DXY, VIX, Gold, SP500) used in this notebook are defined locally rather than in the shared config, since they are not needed anywhere else.
 
 ### How the tracks connect
 The headline question is *whether altcoin diversification potential is regime-dependent*. Track B identifies the regimes while Track A uses them as context to predict BTC direction and reports per-regime accuracy. Notebook `08` answers the headline question directly: a regime-conditional portfolio backtest that measures the diversification benefit (Sharpe ratio, diversification ratio) separately in each Track B regime. Track A's per-regime prediction accuracy and notebook 08's per-regime portfolio backtest are both reported on the same Track B regimes, so the two tracks describe the same market states from two angles: predictability and diversification benefit.
@@ -105,6 +108,7 @@ CryptoLens is a decision-support tool, not an automated trader. The model output
 ```bash
 HSLU_FS26_DSPRO2/
 ├── README.md
+├── LICENSE
 ├── requirements.txt
 ├── .python-version             # pins Python 3.12 for Streamlit Community Cloud
 ├── .gitignore
@@ -264,8 +268,8 @@ prediction accuracy chart showing which days were called correctly, and an accur
 comparison table of the LSTM against the three baselines from notebook 04.
  
 Because the LSTM was trained on Bitcoin data only, forecasts for other coins are not
-available. Selecting an altcoin in the sidebar shows a note and defaults to the
-Bitcoin signal.
+available. The sidebar coin selection has no effect on this tab; it always shows the
+Bitcoin signal regardless of which altcoins are selected.
  
 Data sources: `data/model_outputs/lstm_predictions.csv`,
 `data/model_outputs/baseline_predictions.csv`
@@ -406,7 +410,7 @@ Every notebook and the app will pick up the change automatically on the next run
 ### Macro factor colors
 
 Macro factors (DXY, VIX, Gold, SP500) are not in the shared config since they
-are only used in the EDA notebook. They are defined locally in that notebook as:
+are only used in notebook 03 (exploratory data analysis). They are defined locally in that notebook as:
 
 ```python
 COLORS = {
